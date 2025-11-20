@@ -188,14 +188,22 @@ categoryFilter.addEventListener("focus", async () => {
     const categories = [
       ...new Set(products.map((product) => product.category)),
     ];
+    // Build a set of existing option values to avoid duplicates
+    const existing = new Set(
+      Array.from(categoryFilter.options).map((o) => o.value)
+    );
 
     categories.forEach((category) => {
-      const option = document.createElement("option");
-      option.value = category;
-      option.textContent = category.charAt(0).toUpperCase() + category.slice(1);
-      categoryFilter.appendChild(option);
+      if (!existing.has(category)) {
+        const option = document.createElement("option");
+        option.value = category;
+        option.textContent =
+          category.charAt(0).toUpperCase() + category.slice(1);
+        categoryFilter.appendChild(option);
+      }
     });
 
+    // mark loaded to avoid reprocessing
     categoryFilter.dataset.loaded = true;
   }
 });
