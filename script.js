@@ -121,4 +121,38 @@ document
         cardToUnselect.classList.remove("selected");
       }
     }
-  });
+})
+
+/* Expand product card to show description */
+productsContainer.addEventListener("click", async (e) => {
+  const card = e.target.closest(".product-card");
+  if (!card || card.classList.contains("expanded")) return;
+
+  const productName = card.querySelector("h3").textContent;
+  const products = await loadProducts();
+  const product = products.find((p) => p.name === productName);
+
+  if (product) {
+    const descriptionDiv = document.createElement("div");
+    descriptionDiv.className = "product-description";
+    descriptionDiv.innerHTML = `
+      <p>${product.description}</p>
+      <button class="close-description">Close</button>
+    `;
+    card.appendChild(descriptionDiv);
+    card.classList.add("expanded");
+  }
+});
+
+/* Close expanded product card */
+productsContainer.addEventListener("click", (e) => {
+  if (e.target.classList.contains("close-description")) {
+    const card = e.target.closest(".product-card");
+    const descriptionDiv = card.querySelector(".product-description");
+
+    if (descriptionDiv) {
+      descriptionDiv.remove();
+      card.classList.remove("expanded");
+    }
+  }
+});
