@@ -126,12 +126,67 @@ document
       });
 
       const data = await resp.json();
-      const routineText =
+
+      // If the worker returned an error about missing messages, fall back to calling OpenAI directly (client-side)
+      let routineText =
         data?.routine ||
         data?.text ||
         data?.result ||
-        (data?.choices && data.choices[0]?.message?.content) ||
-        JSON.stringify(data, null, 2);
+        (data?.choices && data.choices[0]?.message?.content);
+
+      if ((!routineText || typeof routineText !== "string") && data?.error) {
+        console.warn(
+          "Worker returned error, attempting direct OpenAI call as fallback:",
+          data
+        );
+
+        // If we have an API key available in the browser, call OpenAI directly
+        const apiKey = window.OPENAI_API_KEY;
+        if (!apiKey) {
+          // Show worker error if we cannot fall back
+          chatWindow.innerHTML = `<pre>Error from worker: ${escapeHtml(
+            JSON.stringify(data, null, 2)
+          )}</pre>`;
+          return;
+        }
+
+        // Build messages for OpenAI using selected products
+        const systemMsgFallback = {
+          role: "system",
+          content:
+            "You are a helpful beauty assistant. Given selected products, provide Morning and Evening routines formatted in Markdown with headings and numbered steps. Use only the provided products where appropriate.",
+        };
+
+        const userMsgFallback = {
+          role: "user",
+          content: `Selected products: ${JSON.stringify(
+            selectedData,
+            null,
+            2
+          )}\n\nPlease generate the routine.`,
+        };
+
+        const openaiResp = await fetch(
+          "https://api.openai.com/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: "gpt-4o",
+              messages: [systemMsgFallback, userMsgFallback],
+              max_tokens: 700,
+            }),
+          }
+        );
+
+        const openaiData = await openaiResp.json();
+        routineText =
+          openaiData?.choices?.[0]?.message?.content ||
+          JSON.stringify(openaiData, null, 2);
+      }
 
       // Render the routine using the Markdown renderer
       chatWindow.innerHTML = `<div class="ai-response">${renderMarkdown(
