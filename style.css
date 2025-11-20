@@ -135,6 +135,15 @@ body {
   outline-offset: 2px;
 }
 
+/* Ensure expanded product cards do not affect others */
+.product-card {
+  align-items: flex-start;
+}
+
+.product-card.expanded {
+  flex-direction: column;
+}
+
 /* visually hidden */
 .visually-hidden {
   position: absolute;
