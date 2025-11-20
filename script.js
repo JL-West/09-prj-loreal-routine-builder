@@ -116,7 +116,7 @@ document
         return;
       }
 
-      const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      const resp = await fetch("https://loreal-chatbot-worker.jaammiiee99.workers.dev/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
