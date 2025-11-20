@@ -116,18 +116,21 @@ document
         return;
       }
 
-      const resp = await fetch("https://loreal-chatbot-worker.jaammiiee99.workers.dev/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o",
-          messages: [systemMsg, userMsg],
-          max_tokens: 700,
-        }),
-      });
+      const resp = await fetch(
+        "https://loreal-chatbot-worker.jaammiiee99.workers.dev/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: "gpt-4o",
+            messages: [systemMsg, userMsg],
+            max_tokens: 700,
+          }),
+        }
+      );
 
       const data = await resp.json();
       const aiText =
@@ -148,11 +151,119 @@ document
     }
   });
 
-/* Chat form submission handler - placeholder for OpenAI integration */
-chatForm.addEventListener("submit", (e) => {
+/* Removed placeholder chat handler — replaced by enhanced handler below */
+/* Chat form submission handler - send user prompt to OpenAI and display reply */
+// Simple Markdown -> HTML helper (supports headings, lists, bold)
+function escapeHtml(str) {
+  return str.replace(
+    /[&<>\"]/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])
+  );
+}
+
+function renderMarkdown(md) {
+  if (!md) return "";
+  // escape first
+  let s = escapeHtml(md);
+  // headings
+  s = s.replace(/^### (.*$)/gim, "<h3>$1</h3>");
+  s = s.replace(/^## (.*$)/gim, "<h2>$1</h2>");
+  s = s.replace(/^# (.*$)/gim, "<h1>$1</h1>");
+  // bold
+  s = s.replace(/\*\*(.*?)\*\*/gim, "<strong>$1</strong>");
+  // unordered lists
+  s = s.replace(/^[-*] (.*)$/gim, "<li>$1</li>");
+  s = s.replace(/(<li>.*<\/li>)/gim, "<ul>$1</ul>");
+  // paragraphs (double line breaks)
+  s = s.replace(/\n\n+/g, "</p><p>");
+  // single line breaks to <br>
+  s = s.replace(/\n/g, "<br>");
+  // wrap with paragraph if not already heading or list
+  if (!/^\s*<h|^\s*<ul/.test(s)) s = "<p>" + s + "</p>";
+  return s;
+}
+
+chatForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  chatWindow.innerHTML = "Connect to the OpenAI API for a response!";
+  const input = document.getElementById("userInput");
+  const text = input.value.trim();
+  if (!text) return;
+
+  // Append user message to chat window
+  const userMsgDiv = document.createElement("div");
+  userMsgDiv.className = "chat-message chat-user";
+  userMsgDiv.textContent = text;
+  chatWindow.appendChild(userMsgDiv);
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+
+  // Clear input and show loading message
+  input.value = "";
+  const loadingDiv = document.createElement("div");
+  loadingDiv.className = "chat-message chat-assistant loading";
+  loadingDiv.textContent = "Thinking...";
+  chatWindow.appendChild(loadingDiv);
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+
+  try {
+    const apiKey = window.OPENAI_API_KEY;
+    if (!apiKey) {
+      loadingDiv.textContent =
+        "Missing OpenAI API key. Add window.OPENAI_API_KEY in secrets.js.";
+      return;
+    }
+
+    // include selected products as context
+    const allProducts = await loadProducts();
+    const selectedData = selectedProducts
+      .map((id) => allProducts.find((p) => p.id === id))
+      .filter(Boolean)
+      .map((p) => ({
+        name: p.name,
+        brand: p.brand,
+        category: p.category,
+        description: p.description,
+      }));
+
+    const systemMsg = {
+      role: "system",
+      content:
+        "You are a helpful beauty assistant. When the user asks for routines, prefer using only the selected products provided in the user's context. Format routines using Markdown sections (e.g. '## Morning Routine', '## Evening Routine') with step-by-step numbered lists. Keep answers concise and actionable.",
+    };
+
+    const userMessage = {
+      role: "user",
+      content: `Selected products (JSON): ${JSON.stringify(
+        selectedData,
+        null,
+        2
+      )}\n\nUser request: ${text}`,
+    };
+
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages: [systemMsg, userMessage],
+        max_tokens: 700,
+      }),
+    });
+
+    const data = await resp.json();
+    const reply = data?.choices?.[0]?.message?.content || "(no response)";
+
+    // Replace loading with assistant reply (render Markdown)
+    loadingDiv.innerHTML = renderMarkdown(reply);
+    loadingDiv.classList.remove("loading");
+    loadingDiv.classList.add("chat-assistant");
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+  } catch (err) {
+    loadingDiv.textContent = `Error: ${err.message}`;
+  }
 });
 
 /* Enable product selection */

@@ -81,6 +81,27 @@ body {
   margin-bottom: 20px;
 }
 
+/* Chat message styles */
+.chat-message {
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  max-width: 100%;
+}
+.chat-user {
+  background: #000;
+  color: #fff;
+  align-self: flex-end;
+}
+.chat-assistant {
+  background: #f1f1f1;
+  color: #111;
+}
+.chat-window .loading {
+  opacity: 0.8;
+  font-style: italic;
+}
+
 /* placeholder message */
 .placeholder-message {
   width: 100%;
