@@ -163,3 +163,63 @@ productsContainer.addEventListener("click", async (e) => {
     }
   }
 });
+
+/* Fix adjacent card expansion issue */
+productsContainer.addEventListener("click", async (e) => {
+  const card = e.target.closest(".product-card");
+  if (!card) return;
+
+  const expandedCard = document.querySelector(".product-card.expanded");
+
+  // Collapse the currently expanded card if it's not the clicked card
+  if (expandedCard && expandedCard !== card) {
+    const descriptionDiv = expandedCard.querySelector(".product-description");
+    if (descriptionDiv) {
+      descriptionDiv.remove();
+      expandedCard.classList.remove("expanded");
+    }
+  }
+
+  // Toggle the clicked card
+  if (!card.classList.contains("expanded")) {
+    const productName = card.querySelector("h3").textContent;
+    const products = await loadProducts();
+    const product = products.find((p) => p.name === productName);
+
+    if (product) {
+      const descriptionDiv = document.createElement("div");
+      descriptionDiv.className = "product-description";
+      descriptionDiv.innerHTML = `
+        <p>${product.description}</p>
+      `;
+      card.appendChild(descriptionDiv);
+      card.classList.add("expanded");
+    }
+  } else {
+    // Collapse the clicked card if it's already expanded
+    const descriptionDiv = card.querySelector(".product-description");
+    if (descriptionDiv) {
+      descriptionDiv.remove();
+      card.classList.remove("expanded");
+    }
+  }
+});
+
+/* Optimize dropdown list loading */
+categoryFilter.addEventListener("focus", async () => {
+  if (!categoryFilter.dataset.loaded) {
+    const products = await loadProducts();
+    const categories = [
+      ...new Set(products.map((product) => product.category)),
+    ];
+
+    categories.forEach((category) => {
+      const option = document.createElement("option");
+      option.value = category;
+      option.textContent = category.charAt(0).toUpperCase() + category.slice(1);
+      categoryFilter.appendChild(option);
+    });
+
+    categoryFilter.dataset.loaded = true;
+  }
+});
