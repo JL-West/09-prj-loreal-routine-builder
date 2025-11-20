@@ -116,30 +116,26 @@ document
         return;
       }
 
-      const resp = await fetch(
-        "https://loreal-chatbot-worker.jaammiiee99.workers.dev/",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: "gpt-4o",
-            messages: [systemMsg, userMsg],
-            max_tokens: 700,
-          }),
-        }
-      );
+      // Send the selected products to the worker. The worker is responsible for calling OpenAI.
+      const workerUrl =
+        "https://loreal-chatbot-worker.jaammiiee99.workers.dev/generateRoutine";
+      const resp = await fetch(workerUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ products: selectedData }),
+      });
 
       const data = await resp.json();
-      const aiText =
-        data?.choices?.[0]?.message?.content || JSON.stringify(data, null, 2);
+      const routineText =
+        data?.routine ||
+        data?.text ||
+        data?.result ||
+        (data?.choices && data.choices[0]?.message?.content) ||
+        JSON.stringify(data, null, 2);
 
-      // Render AI answer in chat window, preserving line breaks
-      chatWindow.innerHTML = `<div class="ai-response">${aiText.replace(
-        /\n/g,
-        "<br>"
+      // Render the routine using the Markdown renderer
+      chatWindow.innerHTML = `<div class="ai-response">${renderMarkdown(
+        routineText
       )}</div>`;
       chatWindow.scrollTop = chatWindow.scrollHeight;
     } catch (err) {
