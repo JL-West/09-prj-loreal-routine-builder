@@ -62,6 +62,92 @@ categoryFilter.addEventListener("change", async (e) => {
   displayProducts(filteredProducts);
 });
 
+/* Generate routine using selected products and OpenAI API */
+document
+  .getElementById("generateRoutine")
+  .addEventListener("click", async () => {
+    const btn = document.getElementById("generateRoutine");
+    if (!btn) return;
+
+    if (!selectedProducts || selectedProducts.length === 0) {
+      chatWindow.innerHTML = `<p>Please select one or more products to generate a routine.</p>`;
+      return;
+    }
+
+    // Show loading state
+    btn.disabled = true;
+    const previousLabel = btn.innerHTML;
+    btn.innerHTML = `Generating...`;
+    chatWindow.innerHTML = `<p>Generating routine — this may take a few seconds...</p>`;
+
+    try {
+      const products = await loadProducts();
+      // Map selected IDs to product data
+      const selectedData = selectedProducts
+        .map((id) => products.find((p) => p.id === id))
+        .filter(Boolean)
+        .map((p) => ({
+          name: p.name,
+          brand: p.brand,
+          category: p.category,
+          description: p.description,
+        }));
+
+      // Build messages for the OpenAI API
+      const systemMsg = {
+        role: "system",
+        content:
+          "You are a helpful beauty assistant. Given a list of products, produce a clear morning and evening skincare routine with step order, usage instructions, and any important cautions. Keep the output friendly and actionable.",
+      };
+
+      const userMsg = {
+        role: "user",
+        content: `Here are the selected products in JSON. Generate a user-friendly routine (morning and evening) that uses these products where appropriate. Return the routine as plain text.\n\nProducts: ${JSON.stringify(
+          selectedData,
+          null,
+          2
+        )}`,
+      };
+
+      // Obtain API key from a global injected variable (e.g., secrets.js should set window.OPENAI_API_KEY)
+      const apiKey = window.OPENAI_API_KEY;
+      if (!apiKey) {
+        chatWindow.innerHTML = `<p>Missing OpenAI API key. Add it to <code>secrets.js</code> as <code>window.OPENAI_API_KEY = 'sk-...'</code>.</p>`;
+        return;
+      }
+
+      const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [systemMsg, userMsg],
+          max_tokens: 700,
+        }),
+      });
+
+      const data = await resp.json();
+      const aiText =
+        data?.choices?.[0]?.message?.content || JSON.stringify(data, null, 2);
+
+      // Render AI answer in chat window, preserving line breaks
+      chatWindow.innerHTML = `<div class="ai-response">${aiText.replace(
+        /\n/g,
+        "<br>"
+      )}</div>`;
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    } catch (err) {
+      console.error(err);
+      chatWindow.innerHTML = `<p>Error generating routine: ${err.message}</p>`;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = previousLabel;
+    }
+  });
+
 /* Chat form submission handler - placeholder for OpenAI integration */
 chatForm.addEventListener("submit", (e) => {
   e.preventDefault();
