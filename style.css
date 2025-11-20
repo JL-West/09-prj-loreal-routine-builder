@@ -263,6 +263,41 @@ body {
   cursor: pointer;
 }
 
+/* Modal styles for product details */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal {
+  background: #fff;
+  max-width: 760px;
+  width: 90%;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+.modal h3 {
+  margin-top: 0;
+}
+.modal p {
+  color: #333;
+  line-height: 1.5;
+}
+.modal-close {
+  position: absolute;
+  right: 18px;
+  top: 12px;
+  background: transparent;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+}
+
 /* selected products */
 .selected-products {
   margin: 40px 0;

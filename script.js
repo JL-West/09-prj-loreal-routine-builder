@@ -13,9 +13,11 @@ productsContainer.innerHTML = `
 
 /* Load product data from JSON file */
 async function loadProducts() {
+  if (window.__productsCache) return window.__productsCache;
   const response = await fetch("products.json");
   const data = await response.json();
-  return data.products;
+  window.__productsCache = data.products;
+  return window.__productsCache;
 }
 
 /* Create HTML for displaying product cards */
@@ -33,7 +35,7 @@ function displayProducts(products) {
   productsContainer.innerHTML = uniqueProducts
     .map(
       (product) => `
-    <div class="product-card">
+    <div class="product-card" data-id="${product.id}">
       <img src="${product.image}" alt="${product.name}">
       <div class="product-info">
         <h3>${product.name}</h3>
@@ -68,20 +70,25 @@ chatForm.addEventListener("submit", (e) => {
 });
 
 /* Enable product selection */
-let selectedProducts = [];
+let selectedProducts = []; // will store product IDs (numbers)
 
 /* Update the Selected Products section */
-function updateSelectedProductsSection() {
+async function updateSelectedProductsSection() {
   const selectedProductsList = document.getElementById("selectedProductsList");
+  const products = await loadProducts();
+  const map = new Map(products.map((p) => [p.id, p]));
+
   selectedProductsList.innerHTML = selectedProducts
-    .map(
-      (product) => `
-        <div class="selected-product-item">
-          <span>${product}</span>
-          <button class="remove-btn" data-product="${product}">Remove</button>
+    .map((id) => {
+      const p = map.get(id);
+      const title = p ? p.name : "Unknown product";
+      return `
+        <div class="selected-product-item" data-id="${id}">
+          <span>${title}</span>
+          <button class="remove-btn" data-id="${id}">Remove</button>
         </div>
-      `
-    )
+      `;
+    })
     .join("");
 }
 
@@ -90,72 +97,58 @@ productsContainer.addEventListener("click", async (e) => {
   const card = e.target.closest(".product-card");
   if (!card) return; // Ignore clicks outside product cards
 
+  const productId = Number(card.dataset.id);
   const productName = card.querySelector("h3").textContent;
-
-  // If clicked the close button inside a description, collapse and return
-  if (e.target.classList.contains("close-description")) {
-    const descriptionDiv = card.querySelector(".product-description");
-    if (descriptionDiv) {
-      descriptionDiv.remove();
-      card.classList.remove("expanded");
-      const detailsBtn = card.querySelector(".details-btn");
-      if (detailsBtn) detailsBtn.setAttribute("aria-expanded", "false");
-    }
-    return;
-  }
 
   // If clicked the Details button, handle accordion expand/collapse
   if (e.target.closest(".details-btn")) {
-    const expandedCard = document.querySelector(".product-card.expanded");
+    // Open a modal with product details instead of inline accordion
+    const products = await loadProducts();
+    const product = products.find((p) => p.id === productId);
+    if (!product) return;
 
-    // Collapse previously expanded card (if different)
-    if (expandedCard && expandedCard !== card) {
-      const descriptionDiv = expandedCard.querySelector(".product-description");
-      if (descriptionDiv) {
-        descriptionDiv.remove();
-        expandedCard.classList.remove("expanded");
-        const prevDetailsBtn = expandedCard.querySelector(".details-btn");
-        if (prevDetailsBtn)
-          prevDetailsBtn.setAttribute("aria-expanded", "false");
-      }
+    // create overlay
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true" aria-label="${product.name}">
+        <button class="modal-close" aria-label="Close">×</button>
+        <h3>${product.name}</h3>
+        <p>${product.description}</p>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    // focus the close button
+    const closeBtn = overlay.querySelector(".modal-close");
+    closeBtn && closeBtn.focus();
+
+    // close handlers
+    function closeModal() {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey);
     }
 
-    // Toggle expansion for the clicked card
-    if (!card.classList.contains("expanded")) {
-      const products = await loadProducts();
-      const product = products.find((p) => p.name === productName);
-
-      if (product) {
-        const descriptionDiv = document.createElement("div");
-        descriptionDiv.className = "product-description";
-        descriptionDiv.innerHTML = `\n        <p>${product.description}</p>\n        <button class="close-description">Close</button>\n      `;
-        card.appendChild(descriptionDiv);
-        card.classList.add("expanded");
-        const detailsBtn = card.querySelector(".details-btn");
-        if (detailsBtn) detailsBtn.setAttribute("aria-expanded", "true");
-      }
-    } else {
-      // Collapse the clicked card if it's already expanded
-      const descriptionDiv = card.querySelector(".product-description");
-      if (descriptionDiv) {
-        descriptionDiv.remove();
-        card.classList.remove("expanded");
-        const detailsBtn = card.querySelector(".details-btn");
-        if (detailsBtn) detailsBtn.setAttribute("aria-expanded", "false");
-      }
+    function onKey(e) {
+      if (e.key === "Escape") closeModal();
     }
 
+    overlay.addEventListener("click", (ev) => {
+      if (ev.target === overlay) closeModal();
+    });
+    closeBtn.addEventListener("click", closeModal);
+    document.addEventListener("keydown", onKey);
     return; // Do not toggle selection when user clicked Details
   }
 
-  // --- Selection behavior: toggle membership in selectedProducts ---
-  if (selectedProducts.includes(productName)) {
+  // --- Selection behavior: toggle membership in selectedProducts (by id) ---
+  if (selectedProducts.includes(productId)) {
     // Unselect product
-    selectedProducts = selectedProducts.filter((name) => name !== productName);
+    selectedProducts = selectedProducts.filter((id) => id !== productId);
     card.classList.remove("selected");
   } else {
     // Select product (guard against duplicates)
-    selectedProducts.push(productName);
+    selectedProducts.push(productId);
     // Ensure uniqueness just in case
     selectedProducts = Array.from(new Set(selectedProducts));
     card.classList.add("selected");
@@ -169,22 +162,18 @@ document
   .getElementById("selectedProductsList")
   .addEventListener("click", (e) => {
     if (e.target.classList.contains("remove-btn")) {
-      const productName = e.target.getAttribute("data-product");
+      const idStr = e.target.getAttribute("data-id");
+      const id = Number(idStr);
 
-      // Remove product from the selected list
-      selectedProducts = selectedProducts.filter(
-        (name) => name !== productName
-      );
+      // Remove product from the selected list (by id)
+      selectedProducts = selectedProducts.filter((pid) => pid !== id);
 
       // Update the Selected Products section
       updateSelectedProductsSection();
 
       // Unselect the product card in the grid
-      const productCards = Array.from(
-        document.querySelectorAll(".product-card")
-      );
-      const cardToUnselect = productCards.find(
-        (card) => card.querySelector("h3").textContent === productName
+      const cardToUnselect = document.querySelector(
+        `.product-card[data-id="${id}"]`
       );
       if (cardToUnselect) {
         cardToUnselect.classList.remove("selected");
