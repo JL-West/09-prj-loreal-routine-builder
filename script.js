@@ -20,7 +20,17 @@ async function loadProducts() {
 
 /* Create HTML for displaying product cards */
 function displayProducts(products) {
-  productsContainer.innerHTML = products
+  // Remove duplicate products by name (keep first occurrence)
+  const seen = new Set();
+  const uniqueProducts = [];
+  for (const p of products) {
+    if (!seen.has(p.name)) {
+      seen.add(p.name);
+      uniqueProducts.push(p);
+    }
+  }
+
+  productsContainer.innerHTML = uniqueProducts
     .map(
       (product) => `
     <div class="product-card">
@@ -28,6 +38,7 @@ function displayProducts(products) {
       <div class="product-info">
         <h3>${product.name}</h3>
         <p>${product.brand}</p>
+        <button class="details-btn" aria-expanded="false">Details</button>
       </div>
     </div>
   `
@@ -74,24 +85,82 @@ function updateSelectedProductsSection() {
     .join("");
 }
 
-/* Toggle product selection on click */
-productsContainer.addEventListener("click", (e) => {
+/* Unified click handler: selection + accordion triggered by Details button */
+productsContainer.addEventListener("click", async (e) => {
   const card = e.target.closest(".product-card");
   if (!card) return; // Ignore clicks outside product cards
 
   const productName = card.querySelector("h3").textContent;
 
+  // If clicked the close button inside a description, collapse and return
+  if (e.target.classList.contains("close-description")) {
+    const descriptionDiv = card.querySelector(".product-description");
+    if (descriptionDiv) {
+      descriptionDiv.remove();
+      card.classList.remove("expanded");
+      const detailsBtn = card.querySelector(".details-btn");
+      if (detailsBtn) detailsBtn.setAttribute("aria-expanded", "false");
+    }
+    return;
+  }
+
+  // If clicked the Details button, handle accordion expand/collapse
+  if (e.target.closest(".details-btn")) {
+    const expandedCard = document.querySelector(".product-card.expanded");
+
+    // Collapse previously expanded card (if different)
+    if (expandedCard && expandedCard !== card) {
+      const descriptionDiv = expandedCard.querySelector(".product-description");
+      if (descriptionDiv) {
+        descriptionDiv.remove();
+        expandedCard.classList.remove("expanded");
+        const prevDetailsBtn = expandedCard.querySelector(".details-btn");
+        if (prevDetailsBtn)
+          prevDetailsBtn.setAttribute("aria-expanded", "false");
+      }
+    }
+
+    // Toggle expansion for the clicked card
+    if (!card.classList.contains("expanded")) {
+      const products = await loadProducts();
+      const product = products.find((p) => p.name === productName);
+
+      if (product) {
+        const descriptionDiv = document.createElement("div");
+        descriptionDiv.className = "product-description";
+        descriptionDiv.innerHTML = `\n        <p>${product.description}</p>\n        <button class="close-description">Close</button>\n      `;
+        card.appendChild(descriptionDiv);
+        card.classList.add("expanded");
+        const detailsBtn = card.querySelector(".details-btn");
+        if (detailsBtn) detailsBtn.setAttribute("aria-expanded", "true");
+      }
+    } else {
+      // Collapse the clicked card if it's already expanded
+      const descriptionDiv = card.querySelector(".product-description");
+      if (descriptionDiv) {
+        descriptionDiv.remove();
+        card.classList.remove("expanded");
+        const detailsBtn = card.querySelector(".details-btn");
+        if (detailsBtn) detailsBtn.setAttribute("aria-expanded", "false");
+      }
+    }
+
+    return; // Do not toggle selection when user clicked Details
+  }
+
+  // --- Selection behavior: toggle membership in selectedProducts ---
   if (selectedProducts.includes(productName)) {
     // Unselect product
     selectedProducts = selectedProducts.filter((name) => name !== productName);
     card.classList.remove("selected");
   } else {
-    // Select product
+    // Select product (guard against duplicates)
     selectedProducts.push(productName);
+    // Ensure uniqueness just in case
+    selectedProducts = Array.from(new Set(selectedProducts));
     card.classList.add("selected");
   }
 
-  console.log("Selected Products:", selectedProducts); // Debugging
   updateSelectedProductsSection();
 });
 
@@ -122,88 +191,6 @@ document
       }
     }
   });
-
-/* Implement accordion-style product description */
-productsContainer.addEventListener("click", async (e) => {
-  const card = e.target.closest(".product-card");
-  if (!card) return;
-
-  const expandedCard = document.querySelector(".product-card.expanded");
-
-  // Collapse the currently expanded card if it's not the clicked card
-  if (expandedCard && expandedCard !== card) {
-    const descriptionDiv = expandedCard.querySelector(".product-description");
-    if (descriptionDiv) {
-      descriptionDiv.remove();
-      expandedCard.classList.remove("expanded");
-    }
-  }
-
-  // Toggle the clicked card
-  if (!card.classList.contains("expanded")) {
-    const productName = card.querySelector("h3").textContent;
-    const products = await loadProducts();
-    const product = products.find((p) => p.name === productName);
-
-    if (product) {
-      const descriptionDiv = document.createElement("div");
-      descriptionDiv.className = "product-description";
-      descriptionDiv.innerHTML = `
-        <p>${product.description}</p>
-      `;
-      card.appendChild(descriptionDiv);
-      card.classList.add("expanded");
-    }
-  } else {
-    // Collapse the clicked card if it's already expanded
-    const descriptionDiv = card.querySelector(".product-description");
-    if (descriptionDiv) {
-      descriptionDiv.remove();
-      card.classList.remove("expanded");
-    }
-  }
-});
-
-/* Fix adjacent card expansion issue */
-productsContainer.addEventListener("click", async (e) => {
-  const card = e.target.closest(".product-card");
-  if (!card) return;
-
-  const expandedCard = document.querySelector(".product-card.expanded");
-
-  // Collapse the currently expanded card if it's not the clicked card
-  if (expandedCard && expandedCard !== card) {
-    const descriptionDiv = expandedCard.querySelector(".product-description");
-    if (descriptionDiv) {
-      descriptionDiv.remove();
-      expandedCard.classList.remove("expanded");
-    }
-  }
-
-  // Toggle the clicked card
-  if (!card.classList.contains("expanded")) {
-    const productName = card.querySelector("h3").textContent;
-    const products = await loadProducts();
-    const product = products.find((p) => p.name === productName);
-
-    if (product) {
-      const descriptionDiv = document.createElement("div");
-      descriptionDiv.className = "product-description";
-      descriptionDiv.innerHTML = `
-        <p>${product.description}</p>
-      `;
-      card.appendChild(descriptionDiv);
-      card.classList.add("expanded");
-    }
-  } else {
-    // Collapse the clicked card if it's already expanded
-    const descriptionDiv = card.querySelector(".product-description");
-    if (descriptionDiv) {
-      descriptionDiv.remove();
-      card.classList.remove("expanded");
-    }
-  }
-});
 
 /* Optimize dropdown list loading */
 categoryFilter.addEventListener("focus", async () => {

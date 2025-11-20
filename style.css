@@ -222,6 +222,47 @@ body {
   color: #666;
 }
 
+/* Details button */
+.details-btn {
+  margin-top: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid #ccc;
+  background: white;
+  color: #333;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.details-btn:focus {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+}
+
+/* Product description area shown by accordion */
+.product-description {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #ddd;
+  width: 100%;
+}
+
+.product-description p {
+  color: #444;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.close-description {
+  margin-top: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid #ccc;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
 /* selected products */
 .selected-products {
   margin: 40px 0;
