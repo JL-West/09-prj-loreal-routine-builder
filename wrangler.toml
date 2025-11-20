@@ -1,0 +1,28 @@
+# Wrangler configuration for the Cloudflare Worker used by this project.
+# Replace placeholder values (account_id, zone_id, route) with real values from
+# your Cloudflare dashboard. Do NOT put your OpenAI API key here — use
+# `wrangler secret put OPENAI_API_KEY` to store it securely.
+
+name = "loreal-routine-builder-chatbot"
+type = "javascript"
+account_id = "https://loreal-routine-builder-chatbot.jaammiiee99.workers.dev/"
+workers_dev = true
+compatibility_date = "2025-11-20"
+
+# If you want to publish to a custom route, set `route` and `zone_id`.
+# route = "https://loreal-routine-builder-chatbot.jaammiiee99.workers.dev/"
+# zone_id = "https://loreal-routine-builder-chatbot.jaammiiee99.workers.dev/"
+
+[build]
+# If your worker source lives in a subfolder or requires a build step, set
+# the command and the path to the upload entry file. By default Wrangler
+# will look for `./worker.js` (or `./src/index.js` depending on your setup).
+# command = "npm run build"
+
+[dev]
+# local dev port
+# port = 8787
+
+[env.production]
+# Use Wrangler secrets for sensitive values. Example: run
+# `wrangler secret put OPENAI_API_KEY` to add your API key to the worker.
