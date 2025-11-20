@@ -55,3 +55,70 @@ chatForm.addEventListener("submit", (e) => {
 
   chatWindow.innerHTML = "Connect to the OpenAI API for a response!";
 });
+
+/* Enable product selection */
+let selectedProducts = [];
+
+/* Update the Selected Products section */
+function updateSelectedProductsSection() {
+  const selectedProductsList = document.getElementById("selectedProductsList");
+  selectedProductsList.innerHTML = selectedProducts
+    .map(
+      (product) => `
+        <div class="selected-product-item">
+          <span>${product}</span>
+          <button class="remove-btn" data-product="${product}">Remove</button>
+        </div>
+      `
+    )
+    .join("");
+}
+
+/* Toggle product selection on click */
+productsContainer.addEventListener("click", (e) => {
+  const card = e.target.closest(".product-card");
+  if (!card) return; // Ignore clicks outside product cards
+
+  const productName = card.querySelector("h3").textContent;
+
+  if (selectedProducts.includes(productName)) {
+    // Unselect product
+    selectedProducts = selectedProducts.filter((name) => name !== productName);
+    card.classList.remove("selected");
+  } else {
+    // Select product
+    selectedProducts.push(productName);
+    card.classList.add("selected");
+  }
+
+  console.log("Selected Products:", selectedProducts); // Debugging
+  updateSelectedProductsSection();
+});
+
+/* Allow removal of items directly from the Selected Products list */
+document
+  .getElementById("selectedProductsList")
+  .addEventListener("click", (e) => {
+    if (e.target.classList.contains("remove-btn")) {
+      const productName = e.target.getAttribute("data-product");
+
+      // Remove product from the selected list
+      selectedProducts = selectedProducts.filter(
+        (name) => name !== productName
+      );
+
+      // Update the Selected Products section
+      updateSelectedProductsSection();
+
+      // Unselect the product card in the grid
+      const productCards = Array.from(
+        document.querySelectorAll(".product-card")
+      );
+      const cardToUnselect = productCards.find(
+        (card) => card.querySelector("h3").textContent === productName
+      );
+      if (cardToUnselect) {
+        cardToUnselect.classList.remove("selected");
+      }
+    }
+  });

@@ -253,3 +253,9 @@ body {
 .generate-btn i {
   margin-right: 8px;
 }
+
+/* Highlight selected product cards */
+.product-card.selected {
+  border: 2px solid #007bff;
+  background-color: #e6f0ff;
+}
