@@ -1,45 +1,90 @@
-/* Get references to DOM elements */
+/*
+  script.js — Clean implementation for the routine builder
+  Features:
+  - Product list loading + caching
+  - Category dropdown + incremental search (combined)
+  - Product selection and Selected Products list with removal
+  - Product details modal
+  - RTL toggle (sets document dir)
+  - Quick web search (DuckDuckGo Instant Answer) for citations
+  - Generate Routine: worker-first, fallback to direct OpenAI call if worker fails
+*/
+
 const categoryFilter = document.getElementById("categoryFilter");
+const productSearch = document.getElementById("productSearch");
+const rtlToggle = document.getElementById("rtlToggle");
 const productsContainer = document.getElementById("productsContainer");
 const chatForm = document.getElementById("chatForm");
 const chatWindow = document.getElementById("chatWindow");
 
-/* Show initial placeholder until user selects a category */
-productsContainer.innerHTML = `
-  <div class="placeholder-message">
-    Select a category to view products
-  </div>
-`;
+if (productsContainer)
+  productsContainer.innerHTML = `<div class="placeholder-message">Select a category to view products</div>`;
 
-/* Load product data from JSON file */
 async function loadProducts() {
   if (window.__productsCache) return window.__productsCache;
-  const response = await fetch("products.json");
-  const data = await response.json();
-  window.__productsCache = data.products;
+  const r = await fetch("products.json");
+  const j = await r.json();
+  window.__productsCache = j.products || [];
   return window.__productsCache;
 }
 
-/* Create HTML for displaying product cards */
-function displayProducts(products) {
-  // Remove duplicate products by name (keep first occurrence)
+let currentCategory = "";
+let currentSearch = "";
+let selectedProducts = [];
+
+function escapeHtml(s) {
+  return String(s || "").replace(
+    /[&<>\"]/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])
+  );
+}
+
+function renderMarkdown(md) {
+  if (!md) return "";
+  let s = escapeHtml(md);
+  s = s.replace(/^### (.*$)/gim, "<h3>$1</h3>");
+  s = s.replace(/^## (.*$)/gim, "<h2>$1</h2>");
+  s = s.replace(/^# (.*$)/gim, "<h1>$1</h1>");
+  s = s.replace(/\*\*(.*?)\*\*/gim, "<strong>$1</strong>");
+  s = s.replace(/^[-*] (.*)$/gim, "<li>$1</li>");
+  s = s.replace(/(<li>.*<\/li>)/gim, "<ul>$1</ul>");
+  s = s.replace(/\n\n+/g, "</p><p>");
+  s = s.replace(/\n/g, "<br>");
+  if (!/^\s*<h|^\s*<ul/.test(s)) s = "<p>" + s + "</p>";
+  return s;
+}
+
+function renderProductsList(products) {
+  if (!productsContainer) return;
   const seen = new Set();
-  const uniqueProducts = [];
-  for (const p of products) {
+  const unique = [];
+  for (const p of products)
     if (!seen.has(p.name)) {
       seen.add(p.name);
-      uniqueProducts.push(p);
+      unique.push(p);
     }
+
+  let list = unique;
+  if (currentCategory)
+    list = list.filter((p) => p.category === currentCategory);
+  if (currentSearch) {
+    const q = currentSearch.toLowerCase();
+    list = list.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        (p.brand && p.brand.toLowerCase().includes(q)) ||
+        (p.description && p.description.toLowerCase().includes(q))
+    );
   }
 
-  productsContainer.innerHTML = uniqueProducts
+  productsContainer.innerHTML = list
     .map(
-      (product) => `
-    <div class="product-card" data-id="${product.id}">
-      <img src="${product.image}" alt="${product.name}">
+      (p) => `
+    <div class="product-card" data-id="${p.id}">
+      <img src="${p.image}" alt="${escapeHtml(p.name)}">
       <div class="product-info">
-        <h3>${product.name}</h3>
-        <p>${product.brand}</p>
+        <h3>${escapeHtml(p.name)}</h3>
+        <p>${escapeHtml(p.brand || "")}</p>
         <button class="details-btn" aria-expanded="false">Details</button>
       </div>
     </div>
@@ -48,226 +93,91 @@ function displayProducts(products) {
     .join("");
 }
 
-/* Filter and display products when category changes */
-categoryFilter.addEventListener("change", async (e) => {
-  const products = await loadProducts();
-  const selectedCategory = e.target.value;
-
-  /* filter() creates a new array containing only products 
-     where the category matches what the user selected */
-  const filteredProducts = products.filter(
-    (product) => product.category === selectedCategory
-  );
-
-  displayProducts(filteredProducts);
-});
-
-/* Generate routine using selected products and OpenAI API */
-document
-  .getElementById("generateRoutine")
-  .addEventListener("click", async () => {
-    const btn = document.getElementById("generateRoutine");
-    if (!btn) return;
-
-    if (!selectedProducts || selectedProducts.length === 0) {
-      chatWindow.innerHTML = `<p>Please select one or more products to generate a routine.</p>`;
-      return;
-    }
-
-    // Show loading state
-    btn.disabled = true;
-    const previousLabel = btn.innerHTML;
-    btn.innerHTML = `Generating...`;
-    chatWindow.innerHTML = `<p>Generating routine — this may take a few seconds...</p>`;
-
-    try {
-      const products = await loadProducts();
-      // Map selected IDs to product data
-      const selectedData = selectedProducts
-        .map((id) => products.find((p) => p.id === id))
-        .filter(Boolean)
-        .map((p) => ({
-          name: p.name,
-          brand: p.brand,
-          category: p.category,
-          description: p.description,
-        }));
-
-      // Build messages for the OpenAI API
-      const systemMsg = {
-        role: "system",
-        content:
-          "You are a helpful beauty assistant. Given a list of products, produce a clear morning and evening skincare routine with step order, usage instructions, and any important cautions. Keep the output friendly and actionable.",
-      };
-
-      const userMsg = {
-        role: "user",
-        content: `Here are the selected products in JSON. Generate a user-friendly routine (morning and evening) that uses these products where appropriate. Return the routine as plain text.\n\nProducts: ${JSON.stringify(
-          selectedData,
-          null,
-          2
-        )}`,
-      };
-
-      // Obtain API key from a global injected variable (e.g., secrets.js should set window.OPENAI_API_KEY)
-      const apiKey = window.OPENAI_API_KEY;
-      if (!apiKey) {
-        chatWindow.innerHTML = `<p>Missing OpenAI API key. Add it to <code>secrets.js</code> as <code>window.OPENAI_API_KEY = 'sk-...'</code>.</p>`;
-        return;
-      }
-
-      // Send the selected products to the worker. The worker is responsible for calling OpenAI.
-      const workerUrl =
-        "https://loreal-chatbot-worker.jaammiiee99.workers.dev/generateRoutine";
-      const resp = await fetch(workerUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ products: selectedData }),
-      });
-
-      const data = await resp.json();
-
-      // If the worker returned an error about missing messages, fall back to calling OpenAI directly (client-side)
-      let routineText =
-        data?.routine ||
-        data?.text ||
-        data?.result ||
-        (data?.choices && data.choices[0]?.message?.content);
-
-      if ((!routineText || typeof routineText !== "string") && data?.error) {
-        console.warn(
-          "Worker returned error, attempting direct OpenAI call as fallback:",
-          data
-        );
-
-        // If we have an API key available in the browser, call OpenAI directly
-        const apiKey = window.OPENAI_API_KEY;
-        if (!apiKey) {
-          // Show worker error if we cannot fall back
-          chatWindow.innerHTML = `<pre>Error from worker: ${escapeHtml(
-            JSON.stringify(data, null, 2)
-          )}</pre>`;
-          return;
-        }
-
-        // Build messages for OpenAI using selected products
-        const systemMsgFallback = {
-          role: "system",
-          content:
-            "You are a helpful beauty assistant. Given selected products, provide Morning and Evening routines formatted in Markdown with headings and numbered steps. Use only the provided products where appropriate.",
-        };
-
-        const userMsgFallback = {
-          role: "user",
-          content: `Selected products: ${JSON.stringify(
-            selectedData,
-            null,
-            2
-          )}\n\nPlease generate the routine.`,
-        };
-
-        const openaiResp = await fetch(
-          "https://api.openai.com/v1/chat/completions",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model: "gpt-4o",
-              messages: [systemMsgFallback, userMsgFallback],
-              max_tokens: 700,
-            }),
-          }
-        );
-
-        const openaiData = await openaiResp.json();
-        routineText =
-          openaiData?.choices?.[0]?.message?.content ||
-          JSON.stringify(openaiData, null, 2);
-      }
-
-      // Render the routine using the Markdown renderer
-      chatWindow.innerHTML = `<div class="ai-response">${renderMarkdown(
-        routineText
-      )}</div>`;
-      chatWindow.scrollTop = chatWindow.scrollHeight;
-    } catch (err) {
-      console.error(err);
-      chatWindow.innerHTML = `<p>Error generating routine: ${err.message}</p>`;
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = previousLabel;
-    }
+if (categoryFilter)
+  categoryFilter.addEventListener("change", async (e) => {
+    currentCategory = e.target.value;
+    renderProductsList(await loadProducts());
+  });
+if (productSearch)
+  productSearch.addEventListener("input", async (e) => {
+    currentSearch = e.target.value.trim();
+    renderProductsList(await loadProducts());
+  });
+if (rtlToggle)
+  rtlToggle.addEventListener("click", () => {
+    const pressed = rtlToggle.getAttribute("aria-pressed") === "true";
+    const next = !pressed;
+    rtlToggle.setAttribute("aria-pressed", String(next));
+    if (next) document.documentElement.setAttribute("dir", "rtl");
+    else document.documentElement.removeAttribute("dir");
   });
 
-/* Removed placeholder chat handler — replaced by enhanced handler below */
-/* Chat form submission handler - send user prompt to OpenAI and display reply */
-// Simple Markdown -> HTML helper (supports headings, lists, bold)
-function escapeHtml(str) {
-  return str.replace(
-    /[&<>\"]/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])
-  );
-}
-
-function renderMarkdown(md) {
-  if (!md) return "";
-  // escape first
-  let s = escapeHtml(md);
-  // headings
-  s = s.replace(/^### (.*$)/gim, "<h3>$1</h3>");
-  s = s.replace(/^## (.*$)/gim, "<h2>$1</h2>");
-  s = s.replace(/^# (.*$)/gim, "<h1>$1</h1>");
-  // bold
-  s = s.replace(/\*\*(.*?)\*\*/gim, "<strong>$1</strong>");
-  // unordered lists
-  s = s.replace(/^[-*] (.*)$/gim, "<li>$1</li>");
-  s = s.replace(/(<li>.*<\/li>)/gim, "<ul>$1</ul>");
-  // paragraphs (double line breaks)
-  s = s.replace(/\n\n+/g, "</p><p>");
-  // single line breaks to <br>
-  s = s.replace(/\n/g, "<br>");
-  // wrap with paragraph if not already heading or list
-  if (!/^\s*<h|^\s*<ul/.test(s)) s = "<p>" + s + "</p>";
-  return s;
-}
-
-chatForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-
-  const input = document.getElementById("userInput");
-  const text = input.value.trim();
-  if (!text) return;
-
-  // Append user message to chat window
-  const userMsgDiv = document.createElement("div");
-  userMsgDiv.className = "chat-message chat-user";
-  userMsgDiv.textContent = text;
-  chatWindow.appendChild(userMsgDiv);
-  chatWindow.scrollTop = chatWindow.scrollHeight;
-
-  // Clear input and show loading message
-  input.value = "";
-  const loadingDiv = document.createElement("div");
-  loadingDiv.className = "chat-message chat-assistant loading";
-  loadingDiv.textContent = "Thinking...";
-  chatWindow.appendChild(loadingDiv);
-  chatWindow.scrollTop = chatWindow.scrollHeight;
-
+async function quickWebSearch(query) {
   try {
-    const apiKey = window.OPENAI_API_KEY;
-    if (!apiKey) {
-      loadingDiv.textContent =
-        "Missing OpenAI API key. Add window.OPENAI_API_KEY in secrets.js.";
-      return;
-    }
+    const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(
+      query
+    )}&format=json&no_redirect=1&skip_disambig=1`;
+    const r = await fetch(url);
+    const j = await r.json();
+    const res = [];
+    if (j.AbstractURL)
+      res.push({
+        title: j.Heading || query,
+        url: j.AbstractURL,
+        snippet: j.AbstractText || "",
+      });
+    (j.RelatedTopics || []).forEach((t) => {
+      if (t.FirstURL)
+        res.push({
+          title: t.Text || query,
+          url: t.FirstURL,
+          snippet: t.Text || "",
+        });
+      else if (t.Topics)
+        t.Topics.forEach(
+          (s) =>
+            s.FirstURL &&
+            res.push({
+              title: s.Text || query,
+              url: s.FirstURL,
+              snippet: s.Text || "",
+            })
+        );
+    });
+    const seen = new Set();
+    return res
+      .filter((r) => {
+        if (!r.url) return false;
+        if (seen.has(r.url)) return false;
+        seen.add(r.url);
+        return true;
+      })
+      .slice(0, 6);
+  } catch (err) {
+    console.warn("search failed", err);
+    return [];
+  }
+}
 
-    // include selected products as context
-    const allProducts = await loadProducts();
+async function generateRoutine() {
+  const btn = document.getElementById("generateRoutine");
+  if (!btn) return;
+  if (!selectedProducts.length) {
+    if (chatWindow)
+      chatWindow.innerHTML =
+        "<p>Please select products to generate a routine.</p>";
+    return;
+  }
+  btn.disabled = true;
+  const prev = btn.innerHTML;
+  btn.innerHTML = "Generating...";
+  if (chatWindow)
+    chatWindow.innerHTML =
+      "<p>Generating routine — this may take a few seconds...</p>";
+  try {
+    const products = await loadProducts();
     const selectedData = selectedProducts
-      .map((id) => allProducts.find((p) => p.id === id))
+      .map((id) => products.find((p) => p.id === id))
       .filter(Boolean)
       .map((p) => ({
         name: p.name,
@@ -275,183 +185,293 @@ chatForm.addEventListener("submit", async (e) => {
         category: p.category,
         description: p.description,
       }));
-
-    const systemMsg = {
-      role: "system",
-      content:
-        "You are a helpful beauty assistant. When the user asks for routines, prefer using only the selected products provided in the user's context. Format routines using Markdown sections (e.g. '## Morning Routine', '## Evening Routine') with step-by-step numbered lists. Keep answers concise and actionable.",
-    };
-
-    const userMessage = {
-      role: "user",
-      content: `Selected products (JSON): ${JSON.stringify(
-        selectedData,
-        null,
-        2
-      )}\n\nUser request: ${text}`,
-    };
-
-    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [systemMsg, userMessage],
-        max_tokens: 700,
-      }),
-    });
-
-    const data = await resp.json();
-    const reply = data?.choices?.[0]?.message?.content || "(no response)";
-
-    // Replace loading with assistant reply (render Markdown)
-    loadingDiv.innerHTML = renderMarkdown(reply);
-    loadingDiv.classList.remove("loading");
-    loadingDiv.classList.add("chat-assistant");
-    chatWindow.scrollTop = chatWindow.scrollHeight;
+    const searchQuery =
+      selectedData.map((p) => p.name).join(" ") || "L'Oréal products";
+    const citations = await quickWebSearch(`${searchQuery} routine L'Oréal`);
+    const workerUrl = "/generateRoutine";
+    let data = null;
+    try {
+      const resp = await fetch(workerUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ products: selectedData, citations }),
+      });
+      data = await resp.json();
+    } catch (e) {
+      data = { error: String(e) };
+    }
+    let routineText =
+      data?.routine ||
+      data?.text ||
+      data?.result ||
+      (data?.choices && data.choices[0]?.message?.content);
+    if ((!routineText || typeof routineText !== "string") && data?.error) {
+      const apiKey = window.OPENAI_API_KEY;
+      if (!apiKey) {
+        if (chatWindow)
+          chatWindow.innerHTML = `<pre>Error from worker: ${escapeHtml(
+            JSON.stringify(data, null, 2)
+          )}</pre>`;
+        return;
+      }
+      const systemMsg = {
+        role: "system",
+        content:
+          "You are a helpful beauty assistant. Given selected products, provide Morning and Evening routines formatted in Markdown with headings and numbered steps.",
+      };
+      const userMsg = {
+        role: "user",
+        content: `Selected products: ${JSON.stringify(
+          selectedData,
+          null,
+          2
+        )}\n\nPlease generate the routine.`,
+      };
+      const openaiResp = await fetch(
+        "https://api.openai.com/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${window.OPENAI_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: "gpt-4o",
+            messages: [systemMsg, userMsg],
+            max_tokens: 700,
+          }),
+        }
+      );
+      const openaiData = await openaiResp.json();
+      routineText =
+        openaiData?.choices?.[0]?.message?.content ||
+        JSON.stringify(openaiData, null, 2);
+    }
+    if (chatWindow) {
+      chatWindow.innerHTML = `<div class="ai-response">${renderMarkdown(
+        routineText
+      )}</div>`;
+      if (citations && citations.length) {
+        const citeHtml = citations
+          .map(
+            (c) =>
+              `<li><a href="${
+                c.url
+              }" target="_blank" rel="noopener noreferrer">${escapeHtml(
+                c.title
+              )}</a><div class="cite-snippet">${escapeHtml(
+                c.snippet
+              )}</div></li>`
+          )
+          .join("");
+        const container = document.createElement("div");
+        container.className = "ai-citations";
+        container.innerHTML = `<h4>Sources</h4><ul>${citeHtml}</ul>`;
+        chatWindow.appendChild(container);
+      }
+    }
   } catch (err) {
-    loadingDiv.textContent = `Error: ${err.message}`;
+    if (chatWindow)
+      chatWindow.innerHTML = `<p>Error generating routine: ${escapeHtml(
+        err.message
+      )}</p>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = prev;
   }
-});
+}
 
-/* Enable product selection */
-let selectedProducts = []; // will store product IDs (numbers)
+const genBtn = document.getElementById("generateRoutine");
+if (genBtn) genBtn.addEventListener("click", generateRoutine);
 
-/* Update the Selected Products section */
+if (chatForm)
+  chatForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const inputEl = document.getElementById("userInput");
+    const text = inputEl ? inputEl.value.trim() : "";
+    if (!text) return;
+    const userDiv = document.createElement("div");
+    userDiv.className = "chat-message chat-user";
+    userDiv.textContent = text;
+    if (chatWindow) chatWindow.appendChild(userDiv);
+    if (inputEl) inputEl.value = "";
+    const loading = document.createElement("div");
+    loading.className = "chat-message chat-assistant loading";
+    loading.textContent = "Thinking...";
+    if (chatWindow) chatWindow.appendChild(loading);
+    try {
+      const apiKey = window.OPENAI_API_KEY;
+      if (!apiKey) {
+        loading.textContent =
+          "Missing OpenAI API key. Add it to secrets.js for fallback.";
+        return;
+      }
+      const allProducts = await loadProducts();
+      const selectedData = selectedProducts
+        .map((id) => allProducts.find((p) => p.id === id))
+        .filter(Boolean)
+        .map((p) => ({
+          name: p.name,
+          brand: p.brand,
+          category: p.category,
+          description: p.description,
+        }));
+      const systemMsg = {
+        role: "system",
+        content:
+          "You are a helpful beauty assistant. Use selected products where appropriate and format answers in Markdown.",
+      };
+      const userMsg = {
+        role: "user",
+        content: `Selected products (JSON): ${JSON.stringify(
+          selectedData,
+          null,
+          2
+        )}\n\nUser request: ${text}`,
+      };
+      const webQ = `${text} ${selectedData
+        .map((s) => s.name)
+        .join(" ")}`.trim();
+      const webResults = await quickWebSearch(webQ);
+      const webMsg = {
+        role: "system",
+        content: `Web search results: ${JSON.stringify(webResults, null, 2)}`,
+      };
+      const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [systemMsg, webMsg, userMsg],
+          max_tokens: 700,
+        }),
+      });
+      const data = await resp.json();
+      const reply = data?.choices?.[0]?.message?.content || "(no response)";
+      loading.innerHTML = renderMarkdown(reply);
+      if (webResults && webResults.length) {
+        const citeHtml = webResults
+          .map(
+            (c) =>
+              `<li><a href="${
+                c.url
+              }" target="_blank" rel="noopener noreferrer">${escapeHtml(
+                c.title
+              )}</a><div class="cite-snippet">${escapeHtml(
+                c.snippet
+              )}</div></li>`
+          )
+          .join("");
+        const container = document.createElement("div");
+        container.className = "ai-citations";
+        container.innerHTML = `<h4>Sources</h4><ul>${citeHtml}</ul>`;
+        loading.appendChild(container);
+      }
+      loading.classList.remove("loading");
+      loading.classList.add("chat-assistant");
+      if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
+    } catch (err) {
+      loading.textContent = `Error: ${escapeHtml(err.message)}`;
+    }
+  });
+
+if (productsContainer)
+  productsContainer.addEventListener("click", async (e) => {
+    const card = e.target.closest(".product-card");
+    if (!card) return;
+    const id = Number(card.dataset.id);
+    if (e.target.closest(".details-btn")) {
+      const products = await loadProducts();
+      const product = products.find((p) => p.id === id);
+      if (!product) return;
+      const overlay = document.createElement("div");
+      overlay.className = "modal-overlay";
+      overlay.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(
+        product.name
+      )}">
+        <button class="modal-close" aria-label="Close">×</button>
+        <h3>${escapeHtml(product.name)}</h3>
+        <p>${escapeHtml(product.description || "")}</p>
+      </div>`;
+      document.body.appendChild(overlay);
+      const close = overlay.querySelector(".modal-close");
+      close && close.focus();
+      function closeModal() {
+        overlay.remove();
+        document.removeEventListener("keydown", onKey);
+      }
+      function onKey(ev) {
+        if (ev.key === "Escape") closeModal();
+      }
+      overlay.addEventListener("click", (ev) => {
+        if (ev.target === overlay) closeModal();
+      });
+      close.addEventListener("click", closeModal);
+      document.addEventListener("keydown", onKey);
+      return;
+    }
+    if (selectedProducts.includes(id)) {
+      selectedProducts = selectedProducts.filter((pid) => pid !== id);
+      card.classList.remove("selected");
+    } else {
+      selectedProducts.push(id);
+      selectedProducts = Array.from(new Set(selectedProducts));
+      card.classList.add("selected");
+    }
+    updateSelectedProductsSection();
+  });
+
 async function updateSelectedProductsSection() {
-  const selectedProductsList = document.getElementById("selectedProductsList");
+  const list = document.getElementById("selectedProductsList");
+  if (!list) return;
   const products = await loadProducts();
   const map = new Map(products.map((p) => [p.id, p]));
-
-  selectedProductsList.innerHTML = selectedProducts
+  list.innerHTML = selectedProducts
     .map((id) => {
       const p = map.get(id);
-      const title = p ? p.name : "Unknown product";
-      return `
-        <div class="selected-product-item" data-id="${id}">
-          <span>${title}</span>
-          <button class="remove-btn" data-id="${id}">Remove</button>
-        </div>
-      `;
+      return `<div class="selected-product-item" data-id="${id}"><span>${escapeHtml(
+        p ? p.name : "Unknown"
+      )}</span><button class="remove-btn" data-id="${id}">Remove</button></div>`;
     })
     .join("");
 }
 
-/* Unified click handler: selection + accordion triggered by Details button */
-productsContainer.addEventListener("click", async (e) => {
-  const card = e.target.closest(".product-card");
-  if (!card) return; // Ignore clicks outside product cards
-
-  const productId = Number(card.dataset.id);
-  const productName = card.querySelector("h3").textContent;
-
-  // If clicked the Details button, handle accordion expand/collapse
-  if (e.target.closest(".details-btn")) {
-    // Open a modal with product details instead of inline accordion
-    const products = await loadProducts();
-    const product = products.find((p) => p.id === productId);
-    if (!product) return;
-
-    // create overlay
-    const overlay = document.createElement("div");
-    overlay.className = "modal-overlay";
-    overlay.innerHTML = `
-      <div class="modal" role="dialog" aria-modal="true" aria-label="${product.name}">
-        <button class="modal-close" aria-label="Close">×</button>
-        <h3>${product.name}</h3>
-        <p>${product.description}</p>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-
-    // focus the close button
-    const closeBtn = overlay.querySelector(".modal-close");
-    closeBtn && closeBtn.focus();
-
-    // close handlers
-    function closeModal() {
-      overlay.remove();
-      document.removeEventListener("keydown", onKey);
-    }
-
-    function onKey(e) {
-      if (e.key === "Escape") closeModal();
-    }
-
-    overlay.addEventListener("click", (ev) => {
-      if (ev.target === overlay) closeModal();
-    });
-    closeBtn.addEventListener("click", closeModal);
-    document.addEventListener("keydown", onKey);
-    return; // Do not toggle selection when user clicked Details
-  }
-
-  // --- Selection behavior: toggle membership in selectedProducts (by id) ---
-  if (selectedProducts.includes(productId)) {
-    // Unselect product
-    selectedProducts = selectedProducts.filter((id) => id !== productId);
-    card.classList.remove("selected");
-  } else {
-    // Select product (guard against duplicates)
-    selectedProducts.push(productId);
-    // Ensure uniqueness just in case
-    selectedProducts = Array.from(new Set(selectedProducts));
-    card.classList.add("selected");
-  }
-
-  updateSelectedProductsSection();
-});
-
-/* Allow removal of items directly from the Selected Products list */
-document
-  .getElementById("selectedProductsList")
-  .addEventListener("click", (e) => {
+const selectedListEl = document.getElementById("selectedProductsList");
+if (selectedListEl)
+  selectedListEl.addEventListener("click", (e) => {
     if (e.target.classList.contains("remove-btn")) {
-      const idStr = e.target.getAttribute("data-id");
-      const id = Number(idStr);
-
-      // Remove product from the selected list (by id)
+      const id = Number(e.target.getAttribute("data-id"));
       selectedProducts = selectedProducts.filter((pid) => pid !== id);
-
-      // Update the Selected Products section
+      const card = document.querySelector(`.product-card[data-id="${id}"]`);
+      if (card) card.classList.remove("selected");
       updateSelectedProductsSection();
-
-      // Unselect the product card in the grid
-      const cardToUnselect = document.querySelector(
-        `.product-card[data-id="${id}"]`
-      );
-      if (cardToUnselect) {
-        cardToUnselect.classList.remove("selected");
-      }
     }
   });
 
-/* Optimize dropdown list loading */
-categoryFilter.addEventListener("focus", async () => {
-  if (!categoryFilter.dataset.loaded) {
+if (categoryFilter)
+  categoryFilter.addEventListener("focus", async () => {
+    if (categoryFilter.dataset.loaded) return;
     const products = await loadProducts();
-    const categories = [
-      ...new Set(products.map((product) => product.category)),
-    ];
-    // Build a set of existing option values to avoid duplicates
+    const cats = [...new Set(products.map((p) => p.category))];
     const existing = new Set(
       Array.from(categoryFilter.options).map((o) => o.value)
     );
-
-    categories.forEach((category) => {
-      if (!existing.has(category)) {
-        const option = document.createElement("option");
-        option.value = category;
-        option.textContent =
-          category.charAt(0).toUpperCase() + category.slice(1);
-        categoryFilter.appendChild(option);
+    cats.forEach((c) => {
+      if (!existing.has(c)) {
+        const opt = document.createElement("option");
+        opt.value = c;
+        opt.textContent = c.charAt(0).toUpperCase() + c.slice(1);
+        categoryFilter.appendChild(opt);
       }
     });
-
-    // mark loaded to avoid reprocessing
     categoryFilter.dataset.loaded = true;
-  }
-});
+  });
+
+(async () => {
+  const prods = await loadProducts();
+  renderProductsList(prods);
+})();
