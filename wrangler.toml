@@ -11,7 +11,7 @@ name = "loreal-routine-builder-chatbot"
 type = "javascript"
 account_id = "https://loreal-routine-builder-chatbot.jaammiiee99.workers.dev/"
 workers_dev = true
-compatibility_date = "2025-11-20"
+compatibility_date = "2025-11-25"
 
 # If you want to publish to a custom route, set `route` and `zone_id`.
 # route = "https://loreal-routine-builder-chatbot.jaammiiee99.workers.dev/"
