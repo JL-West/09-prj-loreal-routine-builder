@@ -1,3 +1,10 @@
-# Secrets file containing API keys
-secrets.js 
-window.OPENAI_API_KEY=*https://loreal-chatbot-worker.jaammiiee99.workers.dev/
+# Local secrets (do NOT commit real API keys)
+secrets.js
+
+# Common ignores
+node_modules/
+.DS_Store
+.env
+.vscode/
+.parcel-cache/
+dist/
