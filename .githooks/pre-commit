@@ -1,0 +1,39 @@
+#!/bin/sh
+# Simple pre-commit hook to catch common secret patterns in staged files.
+# This file is committed into the repository; enable it locally with:
+#   git config core.hooksPath .githooks
+
+set -e
+
+PATTERNS='sk-|OPENAI_API_KEY|AKIA|PRIVATE KEY|-----BEGIN RSA PRIVATE KEY-----|-----BEGIN PRIVATE KEY-----|ghp_[A-Za-z0-9_]+'
+FAIL=0
+
+# Get list of staged files
+STAGED_FILES=$(git diff --cached --name-only)
+
+for FILE in $STAGED_FILES; do
+  # skip deleted files
+  if [ ! -f "$FILE" ]; then
+    continue
+  fi
+
+  # skip binary files (rough heuristic)
+  if git diff --cached --numstat -- "$FILE" | awk '{print $1}' | grep -q "-"; then
+    continue
+  fi
+
+  # show staged version of the file and grep for patterns
+  if git show :"$FILE" | grep -nE "$PATTERNS" >/dev/null 2>&1; then
+    echo "Potential secret detected in staged file: $FILE"
+    git show :"$FILE" | grep -nE --color=always "$PATTERNS" || true
+    FAIL=1
+  fi
+done
+
+if [ "$FAIL" -ne 0 ]; then
+  echo "\nCommit blocked: remove the secret(s) from the staged changes or move them into an ignored secrets file and re-stage."
+  echo "See README.md for how to store secrets securely (wrangler secret put)."
+  exit 1
+fi
+
+exit 0

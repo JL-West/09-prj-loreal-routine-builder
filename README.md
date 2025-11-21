@@ -20,3 +20,21 @@ window.OPENAI_API_KEY = 'sk-REPLACE_WITH_YOUR_KEY';
 ```
 
 Replace the placeholder with your real key only on your local machine.
+
+### Rotate exposed keys
+
+If a key may have been committed or exposed, rotate it immediately:
+
+1. In the OpenAI dashboard, create a new API key and copy the value.
+2. Revoke the old key (in the OpenAI dashboard) to prevent further use.
+3. Update your Cloudflare Worker secret with the new key:
+
+```
+wrangler secret put OPENAI_API_KEY
+```
+
+When prompted, paste the new API key.
+
+4. For local development, update `secrets.js` (on your machine only) with the new key and do not commit it.
+
+If you previously pushed a key to a public repository, assume it was exposed and rotate it right away.
