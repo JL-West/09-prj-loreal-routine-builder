@@ -1,14 +1,7 @@
-/*
-  script.js — Clean implementation for the routine builder
-  Features:
-  - Product list loading + caching
-  - Category dropdown + incremental search (combined)
-  - Product selection and Selected Products list with removal
-  - Product details modal
-  - RTL toggle (sets document dir)
-  - Quick web search (DuckDuckGo Instant Answer) for citations
-  - Generate Routine: worker-first, fallback to direct OpenAI call if worker fails
-*/
+// script.js — main UI and AI integration for the routine builder
+// Single-file, clean implementation: product list, filters, selection, modal,
+// RTL toggle, quick web citations, worker-first routine generation with
+// client-side OpenAI fallback, and a simple chat.
 
 const categoryFilter = document.getElementById("categoryFilter");
 const productSearch = document.getElementById("productSearch");
@@ -16,21 +9,22 @@ const rtlToggle = document.getElementById("rtlToggle");
 const productsContainer = document.getElementById("productsContainer");
 const chatForm = document.getElementById("chatForm");
 const chatWindow = document.getElementById("chatWindow");
+const generateBtn = document.getElementById("generateRoutine");
+const selectedListEl = document.getElementById("selectedProductsList");
 
-if (productsContainer)
-  productsContainer.innerHTML = `<div class="placeholder-message">Select a category to view products</div>`;
-
-async function loadProducts() {
-  if (window.__productsCache) return window.__productsCache;
-  const r = await fetch("products.json");
-  const j = await r.json();
-  window.__productsCache = j.products || [];
-  return window.__productsCache;
-}
-
+// state
 let currentCategory = "";
 let currentSearch = "";
 let selectedProducts = [];
+
+// cache products
+async function loadProducts() {
+  if (window.__productsCache) return window.__productsCache;
+  const res = await fetch("products.json");
+  const j = await res.json();
+  window.__productsCache = j.products || [];
+  return window.__productsCache;
+}
 
 function escapeHtml(s) {
   return String(s || "").replace(
@@ -58,11 +52,12 @@ function renderProductsList(products) {
   if (!productsContainer) return;
   const seen = new Set();
   const unique = [];
-  for (const p of products)
+  for (const p of products) {
     if (!seen.has(p.name)) {
       seen.add(p.name);
       unique.push(p);
     }
+  }
 
   let list = unique;
   if (currentCategory)
@@ -78,39 +73,22 @@ function renderProductsList(products) {
   }
 
   productsContainer.innerHTML = list
-    .map(
-      (p) => `
-    <div class="product-card" data-id="${p.id}">
-      <img src="${p.image}" alt="${escapeHtml(p.name)}">
-      <div class="product-info">
-        <h3>${escapeHtml(p.name)}</h3>
-        <p>${escapeHtml(p.brand || "")}</p>
-        <button class="details-btn" aria-expanded="false">Details</button>
-      </div>
-    </div>
-  `
-    )
+    .map((product) => {
+      const isSelected = selectedProducts.includes(product.id);
+      return `
+      <div class="product-card ${isSelected ? "selected" : ""}" data-id="${
+        product.id
+      }">
+        <img src="${product.image || ""}" alt="${escapeHtml(product.name)}">
+        <div class="product-info">
+          <h3>${escapeHtml(product.name)}</h3>
+          <p>${escapeHtml(product.brand || "")}</p>
+          <button class="details-btn" aria-expanded="false">Details</button>
+        </div>
+      </div>`;
+    })
     .join("");
 }
-
-if (categoryFilter)
-  categoryFilter.addEventListener("change", async (e) => {
-    currentCategory = e.target.value;
-    renderProductsList(await loadProducts());
-  });
-if (productSearch)
-  productSearch.addEventListener("input", async (e) => {
-    currentSearch = e.target.value.trim();
-    renderProductsList(await loadProducts());
-  });
-if (rtlToggle)
-  rtlToggle.addEventListener("click", () => {
-    const pressed = rtlToggle.getAttribute("aria-pressed") === "true";
-    const next = !pressed;
-    rtlToggle.setAttribute("aria-pressed", String(next));
-    if (next) document.documentElement.setAttribute("dir", "rtl");
-    else document.documentElement.removeAttribute("dir");
-  });
 
 async function quickWebSearch(query) {
   try {
@@ -159,21 +137,35 @@ async function quickWebSearch(query) {
   }
 }
 
+async function updateSelectedProductsSection() {
+  if (!selectedListEl) return;
+  const products = await loadProducts();
+  const map = new Map(products.map((p) => [p.id, p]));
+  selectedListEl.innerHTML = selectedProducts
+    .map((id) => {
+      const p = map.get(id);
+      return `<div class="selected-product-item" data-id="${id}"><span>${escapeHtml(
+        p ? p.name : "Unknown"
+      )}</span><button class="remove-btn" data-id="${id}">Remove</button></div>`;
+    })
+    .join("");
+}
+
 async function generateRoutine() {
-  const btn = document.getElementById("generateRoutine");
-  if (!btn) return;
+  if (!generateBtn) return;
   if (!selectedProducts.length) {
     if (chatWindow)
       chatWindow.innerHTML =
-        "<p>Please select products to generate a routine.</p>";
+        "<p>Please select one or more products to generate a routine.</p>";
     return;
   }
-  btn.disabled = true;
-  const prev = btn.innerHTML;
-  btn.innerHTML = "Generating...";
+  generateBtn.disabled = true;
+  const prev = generateBtn.innerHTML;
+  generateBtn.innerHTML = "Generating...";
   if (chatWindow)
     chatWindow.innerHTML =
       "<p>Generating routine — this may take a few seconds...</p>";
+
   try {
     const products = await loadProducts();
     const selectedData = selectedProducts
@@ -185,13 +177,15 @@ async function generateRoutine() {
         category: p.category,
         description: p.description,
       }));
-    const searchQuery =
-      selectedData.map((p) => p.name).join(" ") || "L'Oréal products";
-    const citations = await quickWebSearch(`${searchQuery} routine L'Oréal`);
-    const workerUrl = "/generateRoutine";
+
+    const citations = await quickWebSearch(
+      (selectedData.map((s) => s.name).join(" ") || "L'Oréal") + " routine"
+    );
+
+    // worker-first
     let data = null;
     try {
-      const resp = await fetch(workerUrl, {
+      const resp = await fetch("/generateRoutine", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ products: selectedData, citations }),
@@ -200,18 +194,22 @@ async function generateRoutine() {
     } catch (e) {
       data = { error: String(e) };
     }
+
     let routineText =
       data?.routine ||
       data?.text ||
       data?.result ||
       (data?.choices && data.choices[0]?.message?.content);
+
+    // fallback to client OpenAI if worker failed
     if ((!routineText || typeof routineText !== "string") && data?.error) {
       const apiKey = window.OPENAI_API_KEY;
       if (!apiKey) {
         if (chatWindow)
-          chatWindow.innerHTML = `<pre>Error from worker: ${escapeHtml(
-            JSON.stringify(data, null, 2)
-          )}</pre>`;
+          chatWindow.innerHTML =
+            "<pre>Error from worker: " +
+            escapeHtml(JSON.stringify(data, null, 2)) +
+            "</pre>";
         return;
       }
       const systemMsg = {
@@ -221,36 +219,32 @@ async function generateRoutine() {
       };
       const userMsg = {
         role: "user",
-        content: `Selected products: ${JSON.stringify(
-          selectedData,
-          null,
-          2
-        )}\n\nPlease generate the routine.`,
+        content:
+          "Selected products: " +
+          JSON.stringify(selectedData, null, 2) +
+          "\n\nPlease generate the routine.",
       };
-      const openaiResp = await fetch(
-        "https://api.openai.com/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${window.OPENAI_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: "gpt-4o",
-            messages: [systemMsg, userMsg],
-            max_tokens: 700,
-          }),
-        }
-      );
-      const openaiData = await openaiResp.json();
+      const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + apiKey,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [systemMsg, userMsg],
+          max_tokens: 700,
+        }),
+      });
+      const openaiData = await resp.json();
       routineText =
         openaiData?.choices?.[0]?.message?.content ||
         JSON.stringify(openaiData, null, 2);
     }
+
     if (chatWindow) {
-      chatWindow.innerHTML = `<div class="ai-response">${renderMarkdown(
-        routineText
-      )}</div>`;
+      chatWindow.innerHTML =
+        '<div class="ai-response">' + renderMarkdown(routineText) + "</div>";
       if (citations && citations.length) {
         const citeHtml = citations
           .map(
@@ -266,25 +260,22 @@ async function generateRoutine() {
           .join("");
         const container = document.createElement("div");
         container.className = "ai-citations";
-        container.innerHTML = `<h4>Sources</h4><ul>${citeHtml}</ul>`;
+        container.innerHTML = "<h4>Sources</h4><ul>" + citeHtml + "</ul>";
         chatWindow.appendChild(container);
       }
     }
   } catch (err) {
     if (chatWindow)
-      chatWindow.innerHTML = `<p>Error generating routine: ${escapeHtml(
-        err.message
-      )}</p>`;
+      chatWindow.innerHTML =
+        "<p>Error generating routine: " + escapeHtml(err.message) + "</p>";
   } finally {
-    btn.disabled = false;
-    btn.innerHTML = prev;
+    generateBtn.disabled = false;
+    generateBtn.innerHTML = prev;
   }
 }
 
-const genBtn = document.getElementById("generateRoutine");
-if (genBtn) genBtn.addEventListener("click", generateRoutine);
-
-if (chatForm)
+// Chat handler
+if (chatForm) {
   chatForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const inputEl = document.getElementById("userInput");
@@ -299,6 +290,7 @@ if (chatForm)
     loading.className = "chat-message chat-assistant loading";
     loading.textContent = "Thinking...";
     if (chatWindow) chatWindow.appendChild(loading);
+
     try {
       const apiKey = window.OPENAI_API_KEY;
       if (!apiKey) {
@@ -306,9 +298,9 @@ if (chatForm)
           "Missing OpenAI API key. Add it to secrets.js for fallback.";
         return;
       }
-      const allProducts = await loadProducts();
+      const all = await loadProducts();
       const selectedData = selectedProducts
-        .map((id) => allProducts.find((p) => p.id === id))
+        .map((id) => all.find((p) => p.id === id))
         .filter(Boolean)
         .map((p) => ({
           name: p.name,
@@ -323,25 +315,27 @@ if (chatForm)
       };
       const userMsg = {
         role: "user",
-        content: `Selected products (JSON): ${JSON.stringify(
-          selectedData,
-          null,
-          2
-        )}\n\nUser request: ${text}`,
+        content:
+          "Selected products (JSON): " +
+          JSON.stringify(selectedData, null, 2) +
+          "\n\nUser request: " +
+          text,
       };
-      const webQ = `${text} ${selectedData
-        .map((s) => s.name)
-        .join(" ")}`.trim();
+      const webQ = (
+        text +
+        " " +
+        selectedData.map((s) => s.name).join(" ")
+      ).trim();
       const webResults = await quickWebSearch(webQ);
       const webMsg = {
         role: "system",
-        content: `Web search results: ${JSON.stringify(webResults, null, 2)}`,
+        content: "Web search results: " + JSON.stringify(webResults, null, 2),
       };
       const resp = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: "Bearer " + apiKey,
         },
         body: JSON.stringify({
           model: "gpt-4o",
@@ -367,18 +361,20 @@ if (chatForm)
           .join("");
         const container = document.createElement("div");
         container.className = "ai-citations";
-        container.innerHTML = `<h4>Sources</h4><ul>${citeHtml}</ul>`;
+        container.innerHTML = "<h4>Sources</h4><ul>" + citeHtml + "</ul>";
         loading.appendChild(container);
       }
       loading.classList.remove("loading");
       loading.classList.add("chat-assistant");
       if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
     } catch (err) {
-      loading.textContent = `Error: ${escapeHtml(err.message)}`;
+      loading.textContent = "Error: " + escapeHtml(err.message);
     }
   });
+}
 
-if (productsContainer)
+// Product click handling and details modal
+if (productsContainer) {
   productsContainer.addEventListener("click", async (e) => {
     const card = e.target.closest(".product-card");
     if (!card) return;
@@ -389,14 +385,11 @@ if (productsContainer)
       if (!product) return;
       const overlay = document.createElement("div");
       overlay.className = "modal-overlay";
-      overlay.innerHTML = `
-      <div class="modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(
+      overlay.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(
         product.name
-      )}">
-        <button class="modal-close" aria-label="Close">×</button>
-        <h3>${escapeHtml(product.name)}</h3>
-        <p>${escapeHtml(product.description || "")}</p>
-      </div>`;
+      )}"><button class="modal-close" aria-label="Close">×</button><h3>${escapeHtml(
+        product.name
+      )}</h3><p>${escapeHtml(product.description || "")}</p></div>`;
       document.body.appendChild(overlay);
       const close = overlay.querySelector(".modal-close");
       close && close.focus();
@@ -410,10 +403,12 @@ if (productsContainer)
       overlay.addEventListener("click", (ev) => {
         if (ev.target === overlay) closeModal();
       });
-      close.addEventListener("click", closeModal);
+      close && close.addEventListener("click", closeModal);
       document.addEventListener("keydown", onKey);
       return;
     }
+
+    // toggle selection
     if (selectedProducts.includes(id)) {
       selectedProducts = selectedProducts.filter((pid) => pid !== id);
       card.classList.remove("selected");
@@ -424,35 +419,22 @@ if (productsContainer)
     }
     updateSelectedProductsSection();
   });
-
-async function updateSelectedProductsSection() {
-  const list = document.getElementById("selectedProductsList");
-  if (!list) return;
-  const products = await loadProducts();
-  const map = new Map(products.map((p) => [p.id, p]));
-  list.innerHTML = selectedProducts
-    .map((id) => {
-      const p = map.get(id);
-      return `<div class="selected-product-item" data-id="${id}"><span>${escapeHtml(
-        p ? p.name : "Unknown"
-      )}</span><button class="remove-btn" data-id="${id}">Remove</button></div>`;
-    })
-    .join("");
 }
 
-const selectedListEl = document.getElementById("selectedProductsList");
-if (selectedListEl)
+// selected products remove handler
+if (selectedListEl) {
   selectedListEl.addEventListener("click", (e) => {
-    if (e.target.classList.contains("remove-btn")) {
-      const id = Number(e.target.getAttribute("data-id"));
-      selectedProducts = selectedProducts.filter((pid) => pid !== id);
-      const card = document.querySelector(`.product-card[data-id="${id}"]`);
-      if (card) card.classList.remove("selected");
-      updateSelectedProductsSection();
-    }
+    if (!e.target.classList.contains("remove-btn")) return;
+    const id = Number(e.target.getAttribute("data-id"));
+    selectedProducts = selectedProducts.filter((pid) => pid !== id);
+    const card = document.querySelector(`.product-card[data-id="${id}"]`);
+    if (card) card.classList.remove("selected");
+    updateSelectedProductsSection();
   });
+}
 
-if (categoryFilter)
+// category focus lazy-load
+if (categoryFilter) {
   categoryFilter.addEventListener("focus", async () => {
     if (categoryFilter.dataset.loaded) return;
     const products = await loadProducts();
@@ -468,9 +450,32 @@ if (categoryFilter)
         categoryFilter.appendChild(opt);
       }
     });
-    categoryFilter.dataset.loaded = true;
+    categoryFilter.dataset.loaded = "true";
   });
+}
 
+// change handlers
+if (categoryFilter)
+  categoryFilter.addEventListener("change", async (e) => {
+    currentCategory = e.target.value;
+    renderProductsList(await loadProducts());
+  });
+if (productSearch)
+  productSearch.addEventListener("input", async (e) => {
+    currentSearch = e.target.value.trim();
+    renderProductsList(await loadProducts());
+  });
+if (rtlToggle)
+  rtlToggle.addEventListener("click", () => {
+    const pressed = rtlToggle.getAttribute("aria-pressed") === "true";
+    const next = !pressed;
+    rtlToggle.setAttribute("aria-pressed", String(next));
+    if (next) document.documentElement.setAttribute("dir", "rtl");
+    else document.documentElement.removeAttribute("dir");
+  });
+if (generateBtn) generateBtn.addEventListener("click", generateRoutine);
+
+// initial render
 (async () => {
   const prods = await loadProducts();
   renderProductsList(prods);
