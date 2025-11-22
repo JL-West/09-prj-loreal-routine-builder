@@ -83,6 +83,10 @@ h3 {
 .logo {
   width: 250px;
   margin-bottom: 15px;
+  /* subtle outer glow to lift the logo off dark backgrounds */
+  filter: drop-shadow(0 6px 14px rgba(227, 165, 53, 0.12));
+  transition: filter 0.18s ease, transform 0.18s ease;
+  will-change: filter, transform;
 }
 
 .site-title {
@@ -486,7 +490,10 @@ h3 {
 }
 
 .theme-dark .site-header .logo {
-  filter: brightness(1.12) saturate(1.18) contrast(1.03);
+  /* brighten + subtle gold glow in dark mode */
+  filter: brightness(1.12) saturate(1.18) contrast(1.03)
+    drop-shadow(0 10px 22px rgba(227, 165, 53, 0.18));
+  transition: filter 0.18s ease;
 }
 
 .theme-dark .site-footer a {
