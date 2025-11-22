@@ -6,11 +6,40 @@
 }
 
 /* —— body + fonts —— */
+:root {
+  --brand-primary: #ff003b; /* L'Oréal red */
+  --brand-secondary: #e3a535; /* warm gold */
+  --brand-contrast: #ffffff;
+  --brand-dark: #111111;
+  --muted: #666666;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #faf9f8;
+  --card-border: #e6e2df;
+  --text: var(--brand-dark);
+}
+
+/* —— body + fonts —— */
 body {
-  font-family: "Montserrat", Arial, Helvetica, sans-serif;
-  color: #333;
+  /* Use Playfair Display for an editorial L'Oréal look across the UI */
+  font-family: "Playfair Display", Georgia, serif;
+  color: var(--text);
   display: flex;
   justify-content: center;
+  background: var(--bg);
+}
+
+.site-title,
+.site-header h1 {
+  font-family: "Playfair Display", Georgia, serif;
+  color: var(--brand-primary);
+}
+
+/* Use Playfair Display for prominent headings */
+h1,
+h2,
+h3 {
+  font-family: "Playfair Display", Georgia, serif;
 }
 
 .page-wrapper {
@@ -25,6 +54,32 @@ body {
   padding-bottom: 10px;
 }
 
+/* Theme toggle button (small) */
+.theme-toggle {
+  position: absolute;
+  right: 20px;
+  top: 18px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 16px;
+  box-shadow: 0 2px 6px rgba(12, 12, 12, 0.06);
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+.theme-toggle:hover {
+  transform: translateY(-2px);
+}
+.theme-toggle:focus {
+  outline: 2px solid var(--brand-secondary);
+  outline-offset: 2px;
+}
+
 .logo {
   width: 250px;
   margin-bottom: 15px;
@@ -34,6 +89,10 @@ body {
   font-size: 22px;
   font-weight: 500;
   margin-bottom: 10px;
+}
+
+.site-header .logo {
+  filter: saturate(0.98);
 }
 
 /* category filter */
@@ -46,7 +105,7 @@ body {
   width: 100%;
   padding: 16px;
   font-size: 18px;
-  border: 2px solid #000;
+  border: 2px solid var(--brand-dark);
   border-radius: 8px;
   cursor: pointer;
   background-color: white;
@@ -61,7 +120,7 @@ body {
 /* chat section */
 .chatbox {
   margin: 40px 0;
-  border: 2px solid #000;
+  border: 2px solid var(--brand-dark);
   border-radius: 8px;
   padding: 26px;
 }
@@ -77,25 +136,30 @@ body {
   line-height: 1.5;
   height: 250px;
   overflow-y: auto;
-  background: #fafafa;
+  background: var(--surface-2);
   margin-bottom: 20px;
 }
 
-/* Chat message styles */
 .chat-message {
-  padding: 8px 12px;
-  border-radius: 8px;
-  margin-bottom: 10px;
-  max-width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  max-width: 78%;
+  line-height: 1.4;
+  box-shadow: 0 4px 10px rgba(18, 18, 18, 0.04);
 }
 .chat-user {
-  background: #000;
-  color: #fff;
+  background: var(--brand-primary);
+  color: var(--brand-contrast);
   align-self: flex-end;
+  border-radius: 12px 12px 6px 12px;
+  font-weight: 500;
 }
 .chat-assistant {
-  background: #f1f1f1;
-  color: #111;
+  background: var(--surface);
+  color: var(--text);
+  align-self: flex-start;
+  border-radius: 12px 12px 12px 6px;
 }
 .chat-window .loading {
   opacity: 0.8;
@@ -107,7 +171,7 @@ body {
   width: 100%;
   text-align: center;
   padding: 40px;
-  color: #666;
+  color: var(--muted);
   font-size: 18px;
 }
 
@@ -122,9 +186,9 @@ body {
   flex: 1;
   padding: 12px;
   font-size: 18px;
-  border: none;
-  border-bottom: 2px solid #ccc;
-  background: transparent;
+  border-radius: 12px;
+  border: 1px solid #e6e2df;
+  background: var(--surface);
 }
 
 .chat-form input:focus {
@@ -134,8 +198,8 @@ body {
 
 .chat-form button {
   font-size: 18px;
-  background: #000;
-  color: #fff;
+  background: var(--brand-primary);
+  color: var(--brand-contrast);
   border: none;
   padding: 12px;
   width: 48px;
@@ -144,11 +208,11 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.3s;
+  transition: background 0.2s, transform 0.08s;
 }
 
 .chat-form button:hover {
-  background: #666666;
+  background: var(--brand-secondary);
 }
 
 .chat-form button:focus {
@@ -210,7 +274,7 @@ body {
 
 .product-card {
   flex: 0 1 calc(33.333% - 14px);
-  border: 1px solid #ccc;
+  border: 1px solid var(--card-border);
   padding: 15px;
   border-radius: 4px;
   display: flex;
@@ -223,6 +287,13 @@ body {
   height: 110px;
   object-fit: contain;
   flex-shrink: 0;
+}
+
+/* subtle hover on product cards to feel tactile */
+.product-card:hover {
+  transform: translateY(-4px);
+  transition: transform 0.14s ease;
+  box-shadow: 0 8px 24px rgba(12, 12, 12, 0.06);
 }
 
 .product-card .product-info {
@@ -248,7 +319,7 @@ body {
   margin-top: 8px;
   padding: 6px 10px;
   font-size: 13px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--brand-dark);
   background: white;
   color: #333;
   border-radius: 6px;
@@ -295,7 +366,7 @@ body {
   z-index: 1000;
 }
 .modal {
-  background: #fff;
+  background: var(--surface);
   max-width: 760px;
   width: 90%;
   padding: 20px;
@@ -323,7 +394,7 @@ body {
 .selected-products {
   margin: 40px 0;
   padding: 20px;
-  border: 2px solid #000;
+  border: 2px solid var(--brand-dark);
   border-radius: 8px;
 }
 
@@ -344,16 +415,16 @@ body {
   padding: 16px;
   font-size: 18px;
   font-weight: 500;
-  color: #fff;
-  background: #000;
+  color: var(--brand-contrast);
+  background: var(--brand-primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  transition: background 0.3s;
+  transition: background 0.2s, transform 0.08s;
 }
 
 .generate-btn:hover {
-  background: #666;
+  background: var(--brand-secondary);
 }
 
 .generate-btn i {
@@ -362,8 +433,54 @@ body {
 
 /* Highlight selected product cards */
 .product-card.selected {
-  border: 2px solid #007bff;
-  background-color: #e6f0ff;
+  border: 2px solid var(--brand-primary);
+  background-color: rgba(255, 0, 59, 0.06);
+}
+
+/* Dark theme: apply .theme-dark to the <body> to enable */
+.theme-dark {
+  --bg: #0b0b0b;
+  --surface: #0f1113;
+  --surface-2: #121417;
+  --card-border: #222428;
+  --text: #e9e6e0;
+  --muted: #9a9a9a;
+  --brand-contrast: #111111;
+}
+
+.theme-dark body,
+.theme-dark {
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Dark-mode specific tweaks for elements that use static colors */
+.theme-dark .chat-window {
+  background: var(--surface-2);
+}
+.theme-dark .modal {
+  background: var(--surface);
+}
+.theme-dark .product-card {
+  background: var(--surface);
+  border-color: var(--card-border);
+}
+.theme-dark .chat-user {
+  background: var(--brand-primary);
+  color: var(--brand-contrast);
+}
+.theme-dark .chat-assistant {
+  background: #1a1c1e;
+  color: var(--text);
+}
+.theme-dark .generate-btn {
+  background: var(--brand-primary);
+  color: var(--brand-contrast);
+}
+
+/* Links and footer accents */
+.site-footer a {
+  color: var(--brand-primary);
 }
 
 /* Make chat window a flex column so messages can align-start / align-end */

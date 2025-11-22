@@ -10,6 +10,7 @@ const chatForm = document.getElementById("chatForm");
 const chatWindow = document.getElementById("chatWindow");
 const generateBtn = document.getElementById("generateRoutine");
 const selectedListEl = document.getElementById("selectedProductsList");
+const themeToggle = document.getElementById("themeToggle");
 
 // state
 let currentCategory = "";
@@ -477,6 +478,44 @@ if (productSearch)
   if (useRtl) document.documentElement.setAttribute("dir", "rtl");
   else document.documentElement.removeAttribute("dir");
 })();
+// Theme initialization: persist choice in localStorage and respect prefers-color-scheme
+function applyTheme(theme) {
+  if (theme === "dark") document.body.classList.add("theme-dark");
+  else document.body.classList.remove("theme-dark");
+  if (themeToggle) {
+    themeToggle.setAttribute("aria-pressed", String(theme === "dark"));
+    themeToggle.textContent = theme === "dark" ? "☀️" : "🌓";
+  }
+}
+
+function initTheme() {
+  try {
+    const stored = localStorage.getItem("theme");
+    if (stored) {
+      applyTheme(stored);
+    } else {
+      const prefersDark =
+        window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches;
+      applyTheme(prefersDark ? "dark" : "light");
+    }
+  } catch (e) {
+    /* ignore storage errors */
+  }
+
+  if (themeToggle) {
+    themeToggle.addEventListener("click", () => {
+      const isDark = document.body.classList.contains("theme-dark");
+      const next = isDark ? "light" : "dark";
+      applyTheme(next);
+      try {
+        localStorage.setItem("theme", next);
+      } catch (e) {}
+    });
+  }
+}
+
+initTheme();
 if (generateBtn) generateBtn.addEventListener("click", generateRoutine);
 
 // initial render
