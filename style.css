@@ -365,3 +365,43 @@ body {
   border: 2px solid #007bff;
   background-color: #e6f0ff;
 }
+
+/* Make chat window a flex column so messages can align-start / align-end */
+.chat-window {
+  display: flex;
+  flex-direction: column;
+}
+
+/* RTL-aware adjustments. Uses logical properties where possible and
+   [dir="rtl"] overrides to mirror layout for RTL languages. */
+[dir="rtl"] .product-card {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .product-card .product-info {
+  text-align: right;
+}
+
+[dir="rtl"] .modal {
+  direction: rtl;
+  text-align: right;
+}
+
+/* Place modal close at the inline end (right in LTR, left in RTL) */
+.modal-close {
+  inset-inline-end: 18px;
+  inset-inline-start: auto;
+  right: auto;
+  left: auto;
+}
+
+/* Flip the icon spacing inside the generate button for RTL */
+[dir="rtl"] .generate-btn i {
+  margin-right: 0;
+  margin-left: 8px;
+}
+
+/* Chat message alignment for RTL — user messages align to start instead of end */
+[dir="rtl"] .chat-user {
+  align-self: flex-start;
+}

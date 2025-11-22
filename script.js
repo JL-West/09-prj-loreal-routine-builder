@@ -5,7 +5,6 @@
 
 const categoryFilter = document.getElementById("categoryFilter");
 const productSearch = document.getElementById("productSearch");
-const rtlToggle = document.getElementById("rtlToggle");
 const productsContainer = document.getElementById("productsContainer");
 const chatForm = document.getElementById("chatForm");
 const chatWindow = document.getElementById("chatWindow");
@@ -465,14 +464,19 @@ if (productSearch)
     currentSearch = e.target.value.trim();
     renderProductsList(await loadProducts());
   });
-if (rtlToggle)
-  rtlToggle.addEventListener("click", () => {
-    const pressed = rtlToggle.getAttribute("aria-pressed") === "true";
-    const next = !pressed;
-    rtlToggle.setAttribute("aria-pressed", String(next));
-    if (next) document.documentElement.setAttribute("dir", "rtl");
-    else document.documentElement.removeAttribute("dir");
-  });
+// Auto-detect RTL based on document language / navigator language and hide manual toggle
+(function applyAutoDirection() {
+  const rtlLangs = ["ar", "he", "fa", "ur", "ps", "sd", "ug", "ku"];
+  const lang = (
+    document.documentElement.lang ||
+    navigator.language ||
+    window.navigator.userLanguage ||
+    ""
+  ).toLowerCase();
+  const useRtl = rtlLangs.some((l) => lang.startsWith(l));
+  if (useRtl) document.documentElement.setAttribute("dir", "rtl");
+  else document.documentElement.removeAttribute("dir");
+})();
 if (generateBtn) generateBtn.addEventListener("click", generateRoutine);
 
 // initial render

@@ -1,12 +1,7 @@
 # Wrangler configuration for the Cloudflare Worker used by this project.
 # Replace placeholder values (account_id, zone_id, route) with real values from
 # your Cloudflare dashboard. Do NOT put your OpenAI API key here — use
-<<<<<<< HEAD
-# `wrangler secret put sk-REDACTED` to store it securely.
-=======
 # `wrangler secret put` to store it securely.
->>>>>>> c729ea8 (Remove hardcoded OpenAI API key from Wrangler configuration for secure storage)
-
 name = "loreal-routine-builder-chatbot"
 type = "javascript"
 account_id = "https://loreal-routine-builder-chatbot.jaammiiee99.workers.dev/"
